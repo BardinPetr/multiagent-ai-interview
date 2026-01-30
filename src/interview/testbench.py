@@ -6,7 +6,8 @@ from crewai import Flow
 from crewai.flow import HumanFeedbackProvider, HumanFeedbackPending, PendingFeedbackContext
 
 from interview.state import CandidateInfo, GradeLevel
-from interview.testagent import TestCandidateAgent
+from interview.testagent2 import TestCandidateAgent
+# from interview.testagent import TestCandidateAgent
 
 
 class SimFeedbackProvider(HumanFeedbackProvider):
@@ -41,7 +42,7 @@ def run():
     if len(sys.argv) > 1:
         sc = open(sys.argv[-1]).read()
     else:
-        sc = open("tb_scenario/sc1.list").read()
+        sc = open("tb_scenario/m4.list").read()
 
     tester = TestCandidateAgent(CandidateInfo(
         name="Петр",

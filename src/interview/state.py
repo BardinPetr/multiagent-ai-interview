@@ -145,7 +145,7 @@ class InterviewState(BaseModel):
     candidate_answer: str = ""
 
     question_count: int = 0
-    question_count_max: int = 10
+    question_count_max: int = 8
 
     is_initialized: bool = False
     is_active: bool = True
