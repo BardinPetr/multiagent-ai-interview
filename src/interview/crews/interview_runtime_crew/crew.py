@@ -4,6 +4,7 @@ from crewai import Agent, Crew, Process, Task
 from crewai.agents.agent_builder.base_agent import BaseAgent
 from crewai.project import CrewBase, agent, crew, task
 
+from interview.config.settings import settings
 from interview.state import InterviewState, InterviewerUpdate
 
 
@@ -22,6 +23,7 @@ class InterviewRuntimeCrew:
             config=self.agents_config['interviewer'],
             allow_delegation=True,
             verbose=False,
+            llm=settings.llm
         )
 
     @task
@@ -37,7 +39,8 @@ class InterviewRuntimeCrew:
         return Agent(
             config=self.agents_config['assistive_technical_specialist'],
             allow_delegation=True,
-            verbose=False
+            verbose=False,
+            llm=settings.llm
         )
 
     @agent
@@ -45,7 +48,8 @@ class InterviewRuntimeCrew:
         return Agent(
             config=self.agents_config['assistive_company_manager'],
             allow_delegation=False,
-            verbose=False
+            verbose=False,
+            llm=settings.llm
         )
 
     @crew
@@ -59,10 +63,12 @@ class InterviewRuntimeCrew:
 
 
 def kickoff_interview(crew, state: InterviewState) -> InterviewerUpdate:
-    inputs = {**conduct_interview_input(state), **formulate_technical_question_input(state)}
-    res = crew.crew().kickoff(inputs=inputs)
-    return res.pydantic
-
+    try:
+        inputs = {**conduct_interview_input(state), **formulate_technical_question_input(state)}
+        res = crew.crew().kickoff(inputs=inputs)
+        return res.pydantic
+    except:
+        return kickoff_interview(crew, state)
 
 def conduct_interview_input(state: InterviewState) -> Dict:
     return dict(

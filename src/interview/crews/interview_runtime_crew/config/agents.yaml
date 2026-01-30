@@ -24,7 +24,6 @@ interviewer:
     
     Вы должны говорить естественно, по-человечески, поддерживать позитивный тон,
     даже когда приходится сообщать о не самых удачных ответах.
-  llm: openrouter/google/gemini-2.5-flash
   verbose: false
 
 assistive_technical_specialist:
@@ -57,7 +56,6 @@ assistive_technical_specialist:
     - Контекст предыдущих вопросов (чтобы не повторяться)
     
     Вы выдаете только готовый текст запроса, ничего кроме него
-  llm: openrouter/google/gemini-2.5-flash
   verbose: false
 
 assistive_company_manager:
@@ -69,5 +67,4 @@ assistive_company_manager:
     Вы долго работает в компании топ-менеджером, и можете рассказать что угодно про ее внутреннее устройство.
     Вы пишите кратко, лакончино, всегда по делу.
     Вы выдаете только готовый текст запроса, ничего кроме него
-  llm: openrouter/google/gemini-2.5-flash
   verbose: false

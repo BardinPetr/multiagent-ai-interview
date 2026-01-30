@@ -76,7 +76,6 @@ class SoftSkillScores(BaseModel):
 
 class Difficulty(str, Enum):
     """Категории сложности задач"""
-    TALK = "talk"  # starting point
     EASY = "easy"
     MEDIUM = "medium"
     HARD = "hard"
@@ -93,7 +92,7 @@ class StrategyAction(str, Enum):
 
 
 class StrategistContext(BaseModel):
-    current_difficulty: Difficulty = Difficulty.TALK
+    current_difficulty: Difficulty = Difficulty.MEDIUM
     next_action: StrategyAction = StrategyAction.CONTINUE
     next_topic: str = ""
     thoughts: str = ""
@@ -123,9 +122,10 @@ class InterviewerUpdate(BaseModel):
 
 
 class HistoryItem(BaseModel):
-    question: Optional[str]
-    answer: Optional[str]
-    thoughts: Optional[List[str]]
+    question: Optional[str] = None
+    answer: Optional[str] = None
+    score: Optional[float] = 0
+    thoughts: Optional[List[str]] = Field(default_factory=dict)
 
 
 class InterviewState(BaseModel):

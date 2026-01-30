@@ -4,6 +4,7 @@ from crewai import Agent, Crew, Process, Task
 from crewai.agents.agent_builder.base_agent import BaseAgent
 from crewai.project import CrewBase, agent, crew, task
 
+from interview.config.settings import settings
 from interview.state import InterviewState, EvaluatorContext, SoftSkillScores
 
 
@@ -18,7 +19,8 @@ class EvaluationCrew:
     def evaluator(self) -> Agent:
         return Agent(
             config=self.agents_config['evaluator'],
-            verbose=False
+            verbose=False,
+            llm=settings.llm
         )
 
     @agent
@@ -26,7 +28,8 @@ class EvaluationCrew:
         return Agent(
             config=self.agents_config['softskills_assessor'],
             allow_delegation=False,
-            verbose=False
+            verbose=False,
+            llm=settings.llm
         )
 
     @agent
@@ -35,6 +38,7 @@ class EvaluationCrew:
             config=self.agents_config['fact_checker'],
             allow_delegation=False,
             verbose=False,
+            llm=settings.llm
         )
 
     """"""
@@ -90,10 +94,12 @@ class EvaluationCrew:
 
 
 def kickoff_qa_evaluation(crew, state: InterviewState) -> EvaluatorContext:
-    inputs = evaluate_answer_input(state)
-    res = crew.crew().kickoff(inputs=inputs)
-    return res.pydantic
-
+    try:
+        inputs = evaluate_answer_input(state)
+        res = crew.crew().kickoff(inputs=inputs)
+        return res.pydantic
+    except:
+        return EvaluatorContext(has_info_about_answer=False)
 
 def evaluate_answer_input(state: InterviewState) -> Dict:
     return dict(

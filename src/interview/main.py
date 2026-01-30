@@ -10,6 +10,7 @@ import feedback
 import interview_log
 from interview.crews.direction_crew.crew import kickoff_direction, DirectionCrew
 from interview.crews.evaluation_crew.crew import kickoff_qa_evaluation, EvaluationCrew
+from interview.crews.final_crew.crew import kickoff_final, FinalCrew
 from interview.crews.info_collector_crew.crew import InfoCollectorCrew
 from interview.crews.interview_runtime_crew.crew import InterviewRuntimeCrew, kickoff_interview
 from interview.crews.moderation_crew.crew import ModerationCrew
@@ -176,11 +177,19 @@ class InterviewFlow(Flow[InterviewState]):
             return self.finalize_interview(None)
         return 'step done'
 
+    @human_feedback(
+        message="Ознакомьтесь с результатами интервью: ",
+        provider=feedback.get_feedback_provider()
+    )
     def finalize_interview(self, _):
         """End interview"""
+        result = kickoff_final(FinalCrew(), self.state)
+        log.data.final_feedback = result
         with open(f"logs/interview_log.{datetime.now().timestamp()}.json", "w") as f:
             f.write(log.export())
-        return "completed"
+        with open(f"logs/interview_out.{datetime.now().timestamp()}.md", "w") as f:
+            f.write(result)
+        return result
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ from crewai import Agent, Crew, Process, Task
 from crewai.agents.agent_builder.base_agent import BaseAgent
 from crewai.project import CrewBase, agent, task, crew
 
+from interview.config.settings import settings
 from interview.state import InfoCollectionResult
 
 
@@ -32,7 +33,7 @@ class InfoCollectorCrew:
             Вы задаете вопросы последовательно и понятно, не перегружая кандидата.""",
             verbose=False,
             allow_delegation=False,
-            llm='openrouter/google/gemini-2.5-flash'
+            llm=settings.llm
         )
 
     @task

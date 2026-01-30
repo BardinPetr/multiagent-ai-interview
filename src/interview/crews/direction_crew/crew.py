@@ -4,6 +4,7 @@ from crewai import Agent, Crew, Process, Task
 from crewai.agents.agent_builder.base_agent import BaseAgent
 from crewai.project import CrewBase, agent, crew, task
 
+from interview.config.settings import settings
 from interview.state import InterviewState, StrategistContext, HistoryItem
 
 
@@ -18,14 +19,16 @@ class DirectionCrew:
     def interview_strategist(self) -> Agent:
         return Agent(
             config=self.agents_config['interview_strategist'],
-            verbose=False
+            verbose=False,
+            llm=settings.llm
         )
 
     @agent
     def skills_analyzer(self) -> Agent:
         return Agent(
             config=self.agents_config['skills_analyzer'],
-            verbose=False
+            verbose=False,
+            llm=settings.llm
         )
 
     """"""
@@ -59,12 +62,12 @@ class DirectionCrew:
 
 
 def kickoff_direction(crew, state: InterviewState) -> StrategistContext:
-    # try:
-    inputs = evaluate_direction_input(state)
-    res = crew.crew().kickoff(inputs=inputs)
-    return res.pydantic
-    # except:
-    #     return StrategistContext(next_topic="continue")
+    try:
+        inputs = evaluate_direction_input(state)
+        res = crew.crew().kickoff(inputs=inputs)
+        return res.pydantic
+    except:
+        return StrategistContext(next_topic="continue")
 
 
 def evaluate_direction_input(state: InterviewState) -> Dict:
