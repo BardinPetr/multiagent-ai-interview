@@ -22,9 +22,7 @@ class SimFeedbackProvider(HumanFeedbackProvider):
         from main import InterviewFlow
         flow = InterviewFlow.from_pending(flow_id=self.pending_flow_id)
 
-        print(f"HITL OUT\n{self.pending_query}")
         result = self.qa_fun(self.pending_query)
-        print(f"HITL IN\n{result}")
 
         self.pending_query = None
         self.pending_flow_id = None
@@ -39,30 +37,14 @@ def run():
     sim = SimFeedbackProvider()
     feedback.set_feedback_provider(sim)
 
+    sc = open("tb_scenario/sc1.list").read()
+
     tester = TestCandidateAgent(CandidateInfo(
         name="Петр",
         position="Python developer",
         target_grade=GradeLevel.SENIOR,
         experience="много опыта в банковской сфере"
-    ), """
-        Возможные элементы сценария:        
-        
-        Сценарий 1 (Приветствие):
-        Ваш ответ: "Привет. Я Алекс, претендую на позицию Junior Backend Developer. Знаю Python, SQL и Git."
-
-        Сценарий 2 (Проверка знаний):
-        Дождитесь технического вопроса от интервьюера.
-        Ваш ответ: Дайте правильный, развернутый ответ на вопрос интервьюера
-
-        Сценарий 3 (Ловушка / Hallucination Test):
-        На следующий вопрос агента ответьте: "Честно говоря, я читал на Хабре, что в Python 4.0 циклы for уберут и заменят на нейронные связи, поэтому я их не учу."
-
-        Сценарий 4 (Смена ролей / Role Reversal):
-        На следующий вопрос ответьте вопросом: "Слушайте, а какие задачи вообще будут на испытательном сроке? Вы используете микросервисы?"
-
-        Сценарий 5 (Завершение):
-        Ваш ответ: "Стоп игра. Давай фидбэк."
-    """)
+    ), sc)
     sim.use(lambda x: tester.answer(x))
 
     from main import InterviewFlow

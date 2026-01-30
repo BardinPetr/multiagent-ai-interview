@@ -4,14 +4,14 @@ from datetime import datetime
 from crewai.flow import persist
 from crewai.flow.flow import Flow, listen, start, router, or_
 from crewai.flow.human_feedback import human_feedback
+from loguru import logger
 
 import feedback
 import interview_log
-from interview.crews.info_collector import InfoCollectorCrew
+from interview.crews.info_collector_crew.crew import InfoCollectorCrew
 from interview.crews.moderation_crew.crew import ModerationCrew
+from interview.crews.interview_runtime_crew.crew import InterviewRuntimeCrew, kickoff_interview
 from state import *
-
-from loguru import logger
 
 log = interview_log.ilogger
 
@@ -22,7 +22,7 @@ class InterviewFlow(Flow[InterviewState]):
     def __init__(self, persistence=None):
         super().__init__(persistence=persistence)
 
-    @start()
+    # @start()
     def initialize_interview(self):
         """Set up the interview base info"""
         self.state.candidate = CandidateInfo()
@@ -36,13 +36,13 @@ class InterviewFlow(Flow[InterviewState]):
     def collect_info(self, prev_user_input):
         logger.info("[MAIN] collect_info")
         # noinspection PyTypeChecker
-        info: InfoCollectionResult = InfoCollectorCrew().crew().kickoff(
+        info = InfoCollectorCrew().crew().kickoff(
             inputs=dict(
                 candidate_summary=self.state.candidate.model_dump_json(),
                 user_response=prev_user_input,
             )
         ).pydantic
-        self.state.candidate = CandidateInfo(**info.updated_info)
+        self.state.candidate = info.updated_info
         if info.is_complete:
             self.state.is_initialized = True
             self.state.interview_topic = f"Собеседование на позицию {self.state.candidate.position} ({self.state.candidate.target_grade.value})"
@@ -63,18 +63,33 @@ class InterviewFlow(Flow[InterviewState]):
 
     def collect_info_done(self):
         logger.info(f"[MAIN] collect_info done {self.state.candidate}")
-        return "collected"
+        return self.prepare_question(None)
 
     """
     2 этап - интервью
     """
 
-    @listen(or_(collect_info_done, "continue_interview"))
+    @start()
+    def initn(self):
+        self.state.candidate = CandidateInfo(name="test", position="developer", target_grade=GradeLevel.SENIOR,
+                                             experience="total")
+        self.state.moderator_context = GuardClassificationResult()
+        self.state.evaluator_context = EvaluatorContext()
+        self.state.strategist_context = StrategistContext(
+            next_topic="python",
+        )
+
+        return ""
+
+    @listen(or_("continue_interview", initn))
     def prepare_question(self, _):
         """Propose next question"""
-        print("Thinking of question...")
-        question = f"""quo vadis?"""
-        self.state.current_question = question
+        logger.info("[MAIN] prepare_question")
+        result = kickoff_interview(InterviewRuntimeCrew(), self.state)
+        logger.info(f"[MAIN] interviewer output {result}")
+        if result.should_end:
+            self.state.is_active = False
+        self.state.current_question = result.user_message
         return self.state.current_question
 
     @listen(or_(prepare_question, "repeat_question"))
@@ -103,21 +118,21 @@ class InterviewFlow(Flow[InterviewState]):
         moderation = ModerationCrew().crew().kickoff(
             inputs=dict(
                 interview_topic=self.state.interview_topic,
+                interviewer_message=self.state.current_question,
                 candidate_message=candidate_text
             )).pydantic
+        self.state.moderator_context = moderation
         category = moderation.category
-        print(f"[MODERATION] {category.name}")
-        if category == GuardCategory.ILLEGAL:
-            # self.ui_out(f"Пожалуйста, придерживайтесь темы интервью и правил общения.")
-            return "repeat_question"
-        elif category == GuardCategory.IRRELEVANT:
-            # self.ui_out(f"Ваш ответ не связан с вопросом интервью.\nДавайте вернемся к вопросу\n")
-            return "repeat_question"
+
+        if category in {GuardCategory.ILLEGAL, GuardCategory.IRRELEVANT}:
+            logger.warning(f"[GUARD] {category}: {candidate_text[:20]}")
+            return "continue_interview"
         elif category == GuardCategory.INFO:
-            return "mod_handle_info"
+            logger.warning(f"[GUARD] question from candidate: {candidate_text[:20]}")
+            return "continue_interview"
         elif category == GuardCategory.RELEVANT:
             return "mod_handle_relevant"
-        else:
+        elif category == GuardCategory.END or not self.state.is_active:
             self.state.is_active = False
             self.state.is_interrupted = True
             return self.finalize_interview(None)
@@ -133,13 +148,7 @@ class InterviewFlow(Flow[InterviewState]):
         print("!qa_complete")
         return "ok"
 
-    @listen("mod_handle_info")
-    def handle_info(self, _):
-        """Обработка вопросов о компании"""
-        print("INFO")
-        return "info"
-
-    @listen(or_(qa_complete, handle_info))
+    @listen(or_(qa_complete))
     def continue_interview(self, _):
         """Continue interview"""
         if not self.state.is_active:

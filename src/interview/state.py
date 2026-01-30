@@ -3,86 +3,6 @@ from typing import Optional, List
 
 from pydantic import BaseModel, Field
 
-
-# class GradeLevel(str, Enum):
-#     JUNIOR = "Junior"
-#     MIDDLE = "Middle"
-#     SENIOR = "Senior"
-#
-#
-# class HiringDecision(str, Enum):
-#     NO_HIRE = "No Hire"
-#     HIRE = "Hire"
-#     STRONG_HIRE = "Strong Hire"
-#
-#
-# class ParticipantInfo(BaseModel):
-#     name: str = ""
-#     position: str = ""
-#     target_grade: GradeLevel = GradeLevel.JUNIOR
-#     experience: str = ""
-#
-
-# class TopicCoverage(BaseModel):
-#     topic: str
-#     asked: bool = False
-#     score: float = 0.0
-#     difficulty: str = "easy"  # easy, medium, hard
-#
-#
-# class TurnAnalysis(BaseModel):
-#     turn_id: int
-#     technical_accuracy: float = 0.0
-#     completeness: float = 0.0
-#     confidence_level: str = "medium"
-#     clarity: float = 0.0
-#     is_off_topic: bool = False
-#     is_hallucination: bool = False
-#     detected_issues: List[str] = []
-#     knowledge_gaps: List[str] = []
-#     correct_answers: Dict[str, str] = {}
-#
-#
-# class Turn(BaseModel):
-#     turn_id: int
-#     agent_visible_message: str
-#     user_message: str = ""
-#     internal_thoughts: str = ""
-#     timestamp: datetime = Field(default_factory=datetime.now)
-#
-#
-
-#
-# class FinalFeedback(BaseModel):
-#     grade: GradeLevel
-#     hiring_recommendation: HiringDecision
-#     confidence_score: float  # 0-100
-#
-#     confirmed_skills: List[str] = []
-#     knowledge_gaps: Dict[str, str] = {}  # topic -> correct answer
-#
-#     soft_skills: SoftSkillsScore = SoftSkillsScore()
-#
-#     topics_to_study: List[str] = []
-#     recommended_resources: Dict[str, str] = {}
-#     overall_summary: str = ""
-
-#
-# class ModerationResult(BaseModel):
-#     reason: float
-#     category: Literal["pass", "redirect", "correct"]
-#
-# class InterviewState(BaseModel):
-#     participant: ParticipantInfo = ParticipantInfo()
-#     completed: bool = False
-#     interrupted: bool = False
-#     current_user_input: str = ""
-#
-#
-#     class Config:
-#         use_enum_values = True
-
-
 class GradeLevel(str, Enum):
     """Грейд"""
     INTERN = "intern"
@@ -94,17 +14,17 @@ class GradeLevel(str, Enum):
 
 class CandidateInfo(BaseModel):
     """Информация о кандидате"""
-    name: str = Field(default="", description="Имя кандидата")
-    position: str = Field(default="", description="Вакансия")
+    name: Optional[str] = Field(default=None, description="Имя кандидата")
+    position: Optional[str] = Field(default=None, description="Вакансия")
     target_grade: Optional[GradeLevel] = Field(default=None, description="Целевой грейд")
-    experience: str = Field(default="", description="Опыт работы")
+    experience: Optional[str] = Field(default=None, description="Опыт работы")
 
 
 class InfoCollectionResult(BaseModel):
     """Результат предварительного сбора информации"""
-    is_complete: bool = Field(description="Вся ли необходимая информация собрана")
+    is_complete: bool = Field(default=False, description="Вся ли необходимая информация собрана")
     next_question: Optional[str] = Field(default=None, description="Следующий вопрос для пользователя")
-    updated_info: dict = Field(description="Обновленная информация о кандидате")
+    updated_info: CandidateInfo = Field(default_factory=CandidateInfo, description="Обновленная информация о кандидате")
 
 
 class GuardCategory(str, Enum):
@@ -119,10 +39,10 @@ class GuardCategory(str, Enum):
 
 class GuardClassificationResult(BaseModel):
     """Результат классификации сообщения по безопасности"""
-    category: GuardCategory
-    reason: str
-    recommendation: str
-
+    category: GuardCategory = GuardCategory.RELEVANT
+    reason: str = ""
+    recommendation: str = ""
+    thoughts: str = ""
 
 class HardSkillScore(BaseModel):
     """Результаты по каждой из тем, требуемых на позицию"""
@@ -137,6 +57,47 @@ class SoftSkillScores(BaseModel):
     honesty: float = 0.0
     engagement: float = 0.0
 
+
+class Difficulty(str, Enum):
+    """Категории сложности задач"""
+    TALK = "talk" # starting point
+    EASY = "easy"
+    MEDIUM = "medium"
+    HARD = "hard"
+    EXTRA = "extra"
+
+
+class StrategyAction(str, Enum):
+    """Действия по велению стратега"""
+    CONTINUE = "continue"
+    FINISH = "finish"
+    SWITCH_TOPIC = "switch_topic"
+    DIFFICULTY_UP = "difficulty_up"
+    DIFFICULTY_DOWN = "difficulty_down"
+
+
+class StrategistContext(BaseModel):
+    current_difficulty: Difficulty = Difficulty.TALK
+    next_action: StrategyAction = StrategyAction.CONTINUE
+    next_topic: str = ""
+    question_template: str = "<any>"
+    rationale: str = ""
+    thoughts: str = ""
+
+    class Config:
+        use_enum_values = True
+
+class EvaluatorContext(BaseModel):
+    has_info_about_answer: bool = False
+    score: float = 0 # from -1 (worst) to 1 (best)
+    should_correct_user: bool = False
+    valid_answer: Optional[str] = None
+    thoughts: str = ""
+
+class InterviewerUpdate(BaseModel):
+    should_end: bool = False
+    user_message: str = ""
+    thoughts: str = ""
 
 class InterviewState(BaseModel):
     """Состояние интервью"""
@@ -156,6 +117,10 @@ class InterviewState(BaseModel):
     is_initialized: bool = False
     is_active: bool = True
     is_interrupted: bool = False
+
+    moderator_context: GuardClassificationResult = GuardClassificationResult()
+    evaluator_context: EvaluatorContext = EvaluatorContext()
+    strategist_context: StrategistContext = StrategistContext()
 
     class Config:
         arbitrary_types_allowed = True

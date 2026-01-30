@@ -5,6 +5,7 @@ from interview.state import CandidateInfo
 
 class TestCandidateAgent:
     def __init__(self, candidate: CandidateInfo, scenario: str):
+        self.history = []
         agent = Agent(
             role=f'Актер, играющий кандидат на собеседовании на позицию {candidate.position}',
             goal=f"""
@@ -34,6 +35,7 @@ class TestCandidateAgent:
                 
                 Кроме обычного диалога для достижения цели получить вакансию, 
                 тебе также необходимо отыграть все сценарии их перечисленных ниже:
+                Информация в сценарии приоритетнее всего!.
                 
                 {scenario}
             """,
@@ -43,7 +45,10 @@ class TestCandidateAgent:
         )
 
         task = Task(
-            description="Вопрос от интервьюера: {question}",
+            description=""
+                        "ответить Вопрос от интервьюера: {question}"
+                        ""
+                        "учитывать историю общения: {history}",
             expected_output="Ответ на поставленный вопрос в том виде, в соответствии с тем, какую роль ты играешь, "
                             "но ни в коем случае не выдавай себя что ты актер."
                             "Сохраняй свои ответы краткими, пару предложений, не больше.",
@@ -59,7 +64,8 @@ class TestCandidateAgent:
 
     def answer(self, question: str) -> str:
         print(f"[BOT] Q: {question}")
-        res = self.crew.kickoff(inputs=dict(question=question)).raw
+        res = self.crew.kickoff(inputs=dict(question=question, history='\n'.join(self.history))).raw
         print(f"[BOT] A: {res}")
+        self.history.append(f"===\nQ: {question}\nA: {res}===")
         return res
 

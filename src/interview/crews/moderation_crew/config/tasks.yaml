@@ -6,6 +6,11 @@ classify_candidate_message:
     ---
     {candidate_message}
     ---
+
+    ПОСЛЕДНИЙ ЗАПРОС ОТ ИНТЕРВЬЮЕРА:
+    ---
+    {interviewer_message}
+    ---
     
     КРИТЕРИИ КЛАССИФИКАЦИИ:
     
