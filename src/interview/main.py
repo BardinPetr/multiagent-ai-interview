@@ -7,8 +7,11 @@ from crewai.flow.human_feedback import human_feedback
 
 import feedback
 import interview_log
+from interview.crews.info_collector import InfoCollectorCrew
 from interview.crews.moderation_crew.crew import ModerationCrew
 from state import *
+
+from loguru import logger
 
 log = interview_log.ilogger
 
@@ -22,30 +25,51 @@ class InterviewFlow(Flow[InterviewState]):
     @start()
     def initialize_interview(self):
         """Set up the interview base info"""
-        # name = self.ui_in("Имя: ")
-        # position = self.ui_in("Позиция: ")
-        # grade_choice = self.ui_in("Целевой грейд (junior, middle, senior): ").upper()
-        # grade = GradeLevel.__dict__.get(grade_choice, GradeLevel.JUNIOR)
-        # experience = self.ui_in("Опыт работы кратко: ")
-        # self.state.participant = CandidateInfo(
-        #     name=name,
-        #     position=position,
-        #     target_grade=grade,
-        #     experience=experience
-        # )
-        candidate = CandidateInfo(
-            name="петр",
-            position="senior enterprise python developer",
-            target_grade=GradeLevel.SENIOR,
-            experience="много опыта"
-        )
-        self.state.candidate = candidate
-        self.state.is_initialized = True
-        self.state.interview_topic = f"Собеседование на позицию {candidate.position} ({candidate.target_grade.value})"
-        log.data.participant_name = candidate.name
-        return "initialized"
+        self.state.candidate = CandidateInfo()
+        return ""
 
-    @listen(or_(initialize_interview, "continue_interview"))
+    """
+    1 этап - сбор данныъ о человеке
+    """
+
+    @listen("initialize_interview")
+    def collect_info(self, prev_user_input):
+        logger.info("[MAIN] collect_info")
+        # noinspection PyTypeChecker
+        info: InfoCollectionResult = InfoCollectorCrew().crew().kickoff(
+            inputs=dict(
+                candidate_summary=self.state.candidate.model_dump_json(),
+                user_response=prev_user_input,
+            )
+        ).pydantic
+        self.state.candidate = CandidateInfo(**info.updated_info)
+        if info.is_complete:
+            self.state.is_initialized = True
+            self.state.interview_topic = f"Собеседование на позицию {self.state.candidate.position} ({self.state.candidate.target_grade.value})"
+            return self.collect_info_done()
+        else:
+            return self.collect_info_rq(info.next_question)
+
+    @human_feedback(
+        message="Answer question: ",
+        provider=feedback.get_feedback_provider()
+    )
+    def collect_info_rq(self, query):
+        return query
+
+    @listen(collect_info_rq)
+    def collect_info_rs(self, response):
+        return self.collect_info(response.feedback)
+
+    def collect_info_done(self):
+        logger.info(f"[MAIN] collect_info done {self.state.candidate}")
+        return "collected"
+
+    """
+    2 этап - интервью
+    """
+
+    @listen(or_(collect_info_done, "continue_interview"))
     def prepare_question(self, _):
         """Propose next question"""
         print("Thinking of question...")
@@ -124,7 +148,7 @@ class InterviewFlow(Flow[InterviewState]):
 
     def finalize_interview(self, _):
         """End interview"""
-        with open(f"interview_log.{datetime.now().timestamp()}.json", "w") as f:
+        with open(f"logs/interview_log.{datetime.now().timestamp()}.json", "w") as f:
             f.write(log.export())
         return "completed"
 

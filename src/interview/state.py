@@ -51,11 +51,7 @@ from pydantic import BaseModel, Field
 #     timestamp: datetime = Field(default_factory=datetime.now)
 #
 #
-# class SoftSkillsScore(BaseModel):
-#     clarity: float = 0.0
-#     honesty: float = 0.0
-#     engagement: float = 0.0
-#
+
 #
 # class FinalFeedback(BaseModel):
 #     grade: GradeLevel
@@ -100,8 +96,15 @@ class CandidateInfo(BaseModel):
     """Информация о кандидате"""
     name: str = Field(default="", description="Имя кандидата")
     position: str = Field(default="", description="Вакансия")
-    target_grade: GradeLevel = Field(default=GradeLevel.JUNIOR, description="Целевой грейд")
+    target_grade: Optional[GradeLevel] = Field(default=None, description="Целевой грейд")
     experience: str = Field(default="", description="Опыт работы")
+
+
+class InfoCollectionResult(BaseModel):
+    """Результат предварительного сбора информации"""
+    is_complete: bool = Field(description="Вся ли необходимая информация собрана")
+    next_question: Optional[str] = Field(default=None, description="Следующий вопрос для пользователя")
+    updated_info: dict = Field(description="Обновленная информация о кандидате")
 
 
 class GuardCategory(str, Enum):
@@ -121,11 +124,18 @@ class GuardClassificationResult(BaseModel):
     recommendation: str
 
 
-class InterviewEvent(BaseModel):
-    """События в процессе интервью"""
-    event_type: str
-    data: dict
-    timestamp: Optional[str] = None
+class HardSkillScore(BaseModel):
+    """Результаты по каждой из тем, требуемых на позицию"""
+    topic: str
+    asked_cnt: int = 0
+    score: float = 0.0  # -1.0 (absolute incomprehension) to +1.0 (ideal knowledge)
+
+
+class SoftSkillScores(BaseModel):
+    """Анализ по софтскилам чисто исходя из речи"""
+    clarity: float = 0.0
+    honesty: float = 0.0
+    engagement: float = 0.0
 
 
 class InterviewState(BaseModel):
@@ -134,9 +144,11 @@ class InterviewState(BaseModel):
 
     interview_topic: str = ""
 
+    hards: List[HardSkillScore] = Field(default_factory=list)
+    softs: SoftSkillScores = SoftSkillScores()
+
     current_question: str = ""
     candidate_answer: str = ""
-    input_classification: Optional[GuardClassificationResult] = None
 
     conversation_history: List[dict] = Field(default_factory=list)
     question_count: int = 0
