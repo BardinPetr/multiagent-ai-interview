@@ -8,9 +8,11 @@ from loguru import logger
 
 import feedback
 import interview_log
+from interview.crews.direction_crew.crew import kickoff_direction, DirectionCrew
+from interview.crews.evaluation_crew.crew import kickoff_qa_evaluation, EvaluationCrew
 from interview.crews.info_collector_crew.crew import InfoCollectorCrew
-from interview.crews.moderation_crew.crew import ModerationCrew
 from interview.crews.interview_runtime_crew.crew import InterviewRuntimeCrew, kickoff_interview
+from interview.crews.moderation_crew.crew import ModerationCrew
 from state import *
 
 log = interview_log.ilogger
@@ -73,12 +75,6 @@ class InterviewFlow(Flow[InterviewState]):
     def initn(self):
         self.state.candidate = CandidateInfo(name="test", position="developer", target_grade=GradeLevel.SENIOR,
                                              experience="total")
-        self.state.moderator_context = GuardClassificationResult()
-        self.state.evaluator_context = EvaluatorContext()
-        self.state.strategist_context = StrategistContext(
-            next_topic="python",
-        )
-
         return ""
 
     @listen(or_("continue_interview", initn))
@@ -115,12 +111,17 @@ class InterviewFlow(Flow[InterviewState]):
     @router(get_candidate_answer)
     def moderate_input(self, candidate_text):
         """Apply input moderation and minimal intention classification"""
-        moderation = ModerationCrew().crew().kickoff(
-            inputs=dict(
-                interview_topic=self.state.interview_topic,
-                interviewer_message=self.state.current_question,
-                candidate_message=candidate_text
-            )).pydantic
+        try:
+            moderation = ModerationCrew().crew().kickoff(
+                inputs=dict(
+                    interview_topic=self.state.interview_topic,
+                    interviewer_message=self.state.current_question,
+                    candidate_message=candidate_text
+                )).pydantic
+        except:
+            self.state.moderator_context = GuardClassificationResult()
+            return "continue_interview"
+
         self.state.moderator_context = moderation
         category = moderation.category
 
@@ -140,12 +141,32 @@ class InterviewFlow(Flow[InterviewState]):
     @listen("mod_handle_relevant")
     def handle_relevant(self, _):
         """Обработка релевантных ответов"""
-        print(f"!РЕЛЕВАНТНЫЙ ОТВЕТ")
+        logger.info(f"[MAIN] continua analyze QA")
+        result = kickoff_qa_evaluation(EvaluationCrew(), self.state)
+        self.state.evaluator_context = result
+        if t := self.state.hards_by_topic.get(result.topic.lower(), None):
+            t.asked_cnt += 1
+            t.score += result.score
+        else:
+            self.state.hards_by_topic[result.topic] = HardSkillScore(topic=result.topic, score=result.score,
+                                                                     asked_cnt=1)
+        if result.softskills:
+            self.state.softs.update(result.softskills)
+        logger.info(f"[MAIN] analysis output score={result.score} {result.softskills}")
         return "answer"
 
     @listen(handle_relevant)
     def qa_complete(self, _):
-        print("!qa_complete")
+        logger.info(f"[MAIN] strategy...")
+        result = kickoff_direction(DirectionCrew(), self.state)
+        logger.info(f"[MAIN] output {result}")
+        self.state.strategist_context = result
+        next_topic = result.next_topic.lower()
+        if self.state.current_topic.topic != next_topic:
+            self.state.current_topic = HardSkillScore(topic=next_topic)
+        if next_topic not in self.state.hards_by_topic:
+            self.state.hards_by_topic[next_topic] = HardSkillScore(topic=next_topic)
+        self.state.question_count += 1
         return "ok"
 
     @listen(or_(qa_complete))

@@ -21,7 +21,7 @@ class InterviewRuntimeCrew:
         return Agent(
             config=self.agents_config['interviewer'],
             allow_delegation=True,
-            verbose=True,
+            verbose=False,
         )
 
     @task
@@ -37,7 +37,7 @@ class InterviewRuntimeCrew:
         return Agent(
             config=self.agents_config['assistive_technical_specialist'],
             allow_delegation=True,
-            verbose=True
+            verbose=False
         )
 
     @agent
@@ -45,7 +45,7 @@ class InterviewRuntimeCrew:
         return Agent(
             config=self.agents_config['assistive_company_manager'],
             allow_delegation=False,
-            verbose=True
+            verbose=False
         )
 
     @crew
@@ -54,7 +54,7 @@ class InterviewRuntimeCrew:
             agents=self.agents,
             tasks=self.tasks,
             process=Process.sequential,
-            verbose=True
+            verbose=False
         )
 
 
@@ -89,10 +89,6 @@ def formulate_technical_question_input(state: InterviewState) -> Dict:
     return dict(
         topic=state.strategist_context.next_topic or state.interview_topic,
         difficulty=state.strategist_context.current_difficulty,
-        question_template=state.strategist_context.question_template,
         target_grade=state.candidate.target_grade,
-        previous_questions="\n".join([msg.get('content', '')
-                                      for msg in state.conversation_history
-                                      if msg.get('role') == 'assistant'
-                                      ][-3:]) or "Предыдущих вопросов не было",
+        previous_questions="\n".join(i.model_dump_json() for i in state.history[-3:]) if state.history else "Предыдущих вопросов не было",
     )
