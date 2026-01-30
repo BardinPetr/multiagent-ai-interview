@@ -13,15 +13,15 @@ class LogEntry(BaseModel):
 
 
 class InterviewLog(BaseModel):
-    participant_name: str
+    participant_name: str = ""
     turns: List[LogEntry] = []
     final_feedback: str = ""
 
 
 class InterviewLogger(BaseEventListener):
-    def __init__(self, participant_name: str):
+    def __init__(self):
         super().__init__()
-        self.data = InterviewLog(participant_name=participant_name)
+        self.data = InterviewLog()
 
     def next(self):
         self.data.turns.append(LogEntry(turn_id=len(self.data.turns) + 1))
@@ -42,7 +42,7 @@ class InterviewLogger(BaseEventListener):
         self.data.turns[-1].final_feedback = text
 
     def export(self) -> str:
-        return self.data.model_dump_json(indent=2, ensure_ascii=False)
+        return self.data.model_dump_json(indent=2)
 
     def setup_listeners(self, crewai_event_bus):
         @crewai_event_bus.on(TaskCompletedEvent)
@@ -53,4 +53,6 @@ class InterviewLogger(BaseEventListener):
                 text = reason
             if out.json_dict and (reason := out.json_dict.get('reason', None)):
                 text = reason
-            self.on_internal(source.role, text)
+            self.on_internal(source.agent.role, text)
+
+ilogger = InterviewLogger()

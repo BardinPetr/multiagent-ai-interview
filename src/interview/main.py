@@ -1,27 +1,23 @@
 #!/usr/bin/env python
-import time
 from datetime import datetime
 
-from crewai.flow.flow import Flow, listen, start, and_, router, or_
+from crewai.flow import persist
+from crewai.flow.flow import Flow, listen, start, router, or_
+from crewai.flow.human_feedback import human_feedback
 
+import feedback
+import interview_log
 from interview.crews.moderation_crew.crew import ModerationCrew
-from interview.interview_log import InterviewLogger
 from state import *
 
+log = interview_log.ilogger
 
+
+@persist()
 class InterviewFlow(Flow[InterviewState]):
-    def __init__(self):
-        super().__init__()
-        self.logger: Optional[InterviewLogger] = None
 
-    def ui_out(self, text: str):
-        text += "\n"
-        self.logger.on_interviewer(text)
-        print(text)
-
-    def ui_in(self, prompt: str = ""):
-        txt = input(prompt + "\n> ")
-        return txt.strip()
+    def __init__(self, persistence=None):
+        super().__init__(persistence=persistence)
 
     @start()
     def initialize_interview(self):
@@ -46,36 +42,36 @@ class InterviewFlow(Flow[InterviewState]):
         self.state.candidate = candidate
         self.state.is_initialized = True
         self.state.interview_topic = f"Собеседование на позицию {candidate.position} ({candidate.target_grade.value})"
-        self.logger = InterviewLogger(candidate.name)
-
-        self.ui_out(f"\nНачинаем интервью. Для досрочного завершения можно попросить остановить интервью.")
+        log.data.participant_name = candidate.name
         return "initialized"
 
     @listen(or_(initialize_interview, "continue_interview"))
     def prepare_question(self, _):
         """Propose next question"""
         print("Thinking of question...")
-        question = f"""Q?"""
+        question = f"""quo vadis?"""
         self.state.current_question = question
-
-        self.logger.next()
         return self.state.current_question
 
     @listen(or_(prepare_question, "repeat_question"))
+    @human_feedback(
+        message="Answer question: ",
+        provider=feedback.get_feedback_provider()
+    )
     def ask_question(self):
         """Ask prepared question"""
         q = self.state.current_question
-        self.ui_out(f"\n[Interviewer]: {q}\n")
-        self.logger.on_interviewer(q)
+        log.next()
+        log.on_interviewer(q)
         return self.state.current_question
 
     @listen(ask_question)
-    def get_candidate_answer(self, _):
+    def get_candidate_answer(self, human_result):
         """Get response from candidate"""
-        response = self.ui_in()
-        self.logger.on_user(response)
-        self.state.candidate_answer = response
-        return response
+        text = human_result.feedback
+        log.on_user(text)
+        self.state.candidate_answer = text
+        return text
 
     @router(get_candidate_answer)
     def moderate_input(self, candidate_text):
@@ -86,18 +82,18 @@ class InterviewFlow(Flow[InterviewState]):
                 candidate_message=candidate_text
             )).pydantic
         category = moderation.category
+        print(f"[MODERATION] {category.name}")
         if category == GuardCategory.ILLEGAL:
-            self.ui_out(f"Пожалуйста, придерживайтесь темы интервью и правил общения.")
+            # self.ui_out(f"Пожалуйста, придерживайтесь темы интервью и правил общения.")
             return "repeat_question"
         elif category == GuardCategory.IRRELEVANT:
-            self.ui_out(f"Ваш ответ не связан с вопросом интервью.\nДавайте вернемся к вопросу\n")
+            # self.ui_out(f"Ваш ответ не связан с вопросом интервью.\nДавайте вернемся к вопросу\n")
             return "repeat_question"
         elif category == GuardCategory.INFO:
             return "mod_handle_info"
         elif category == GuardCategory.RELEVANT:
             return "mod_handle_relevant"
         else:
-            self.ui_out(f"Завершаем интервью")
             self.state.is_active = False
             self.state.is_interrupted = True
             return self.finalize_interview(None)
@@ -124,14 +120,12 @@ class InterviewFlow(Flow[InterviewState]):
         """Continue interview"""
         if not self.state.is_active:
             return self.finalize_interview(None)
-        self.ui_out(f"Переход к следующему вопросу")
         return 'step done'
 
     def finalize_interview(self, _):
         """End interview"""
-        self.ui_out(f"ИНТЕРВЬЮ ЗАВЕРШЕНО")
         with open(f"interview_log.{datetime.now().timestamp()}.json", "w") as f:
-            f.write(self.logger.export())
+            f.write(log.export())
         return "completed"
 
 
