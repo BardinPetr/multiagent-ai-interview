@@ -1,0 +1,62 @@
+@startuml
+
+:User: as U
+
+
+
+package InfoCollectorCrew {
+    actor InfoCollector as IC
+
+    IC --> U : personal info and\ntarget position query
+
+    U --> IC : name,position,grade...
+}
+
+package InterviewRuntimeCrew {
+    actor Interviewer as IN
+    actor TechnicalSpecialist as TS
+    actor CompanyManager as CM
+
+    IN --> TS : make question for topic
+
+    TS --> IN : questio text
+
+    IN --> U : ask user
+
+    IN --> CM : forward users's question\n to ger answer
+}
+
+package ModerationCrew {
+    actor Moderator as M
+    U --> M : all queries
+
+    M --> IN : classified queries\n(offtopic, irrelevent, violations, good)
+}
+
+package EvaluationCrew {
+    actor SoftSkillsAssessor as SSA
+    actor FactChecker as FC
+    actor Evaluator as EV
+    M ---> EV : user answer
+    IN ---> EV : question
+
+    EV <--> FC : check facts
+    EV <--> SSA : analyze texts\n for softskills meta info
+}
+
+package DirectionCrew {
+    actor Strategist as ST
+    actor SkillAnalyzer as SAN
+
+    EV --> ST : answer validatioon results
+
+    ST <--> SAN : analyze skills already checked\n and their scores
+
+    ST <--> ST : plan next actions
+
+    ST --> IN : next question topic, difficulty level,\n other actions
+}
+
+
+
+@enduml
