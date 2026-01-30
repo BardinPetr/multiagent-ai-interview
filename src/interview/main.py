@@ -2,21 +2,20 @@
 from datetime import datetime
 
 from crewai.flow import persist
-from crewai.flow.flow import Flow, listen, start, router, or_
+from crewai.flow.flow import Flow, listen, router, start
 from crewai.flow.human_feedback import human_feedback
 from loguru import logger
 
 import feedback
-import interview_log
-from interview.crews.direction_crew.crew import kickoff_direction, DirectionCrew
-from interview.crews.evaluation_crew.crew import kickoff_qa_evaluation, EvaluationCrew
-from interview.crews.final_crew.crew import kickoff_final, FinalCrew
-from interview.crews.info_collector_crew.crew import InfoCollectorCrew
-from interview.crews.interview_runtime_crew.crew import InterviewRuntimeCrew, kickoff_interview
-from interview.crews.moderation_crew.crew import ModerationCrew
+import interview_log as ilog
+from crews.direction_crew.crew import kickoff_direction, DirectionCrew
+from crews.evaluation_crew.crew import kickoff_qa_evaluation, EvaluationCrew
+from crews.final_crew.crew import kickoff_final, FinalCrew
+from crews.info_collector_crew.crew import InfoCollectorCrew, kickoff_collector
+from crews.interview_runtime_crew.crew import InterviewRuntimeCrew, kickoff_interview
+from crews.moderation_crew.crew import ModerationCrew
+from interview.crews.moderation_crew.crew import kickoff_moderator
 from state import *
-
-log = interview_log.ilogger
 
 
 @persist()
@@ -25,7 +24,7 @@ class InterviewFlow(Flow[InterviewState]):
     def __init__(self, persistence=None):
         super().__init__(persistence=persistence)
 
-    # @start()
+    @start()
     def initialize_interview(self):
         """Set up the interview base info"""
         self.state.candidate = CandidateInfo()
@@ -39,12 +38,7 @@ class InterviewFlow(Flow[InterviewState]):
     def collect_info(self, prev_user_input):
         logger.info("[MAIN] collect_info")
         # noinspection PyTypeChecker
-        info = InfoCollectorCrew().crew().kickoff(
-            inputs=dict(
-                candidate_summary=self.state.candidate.model_dump_json(),
-                user_response=prev_user_input,
-            )
-        ).pydantic
+        info = kickoff_collector(InfoCollectorCrew(), self.state, prev_user_input)
         self.state.candidate = info.updated_info
         if info.is_complete:
             self.state.is_initialized = True
@@ -69,60 +63,46 @@ class InterviewFlow(Flow[InterviewState]):
         return self.prepare_question(None)
 
     """
-    2 этап - интервью
+    2 этап - генерация вопроса и получение ответа
     """
 
-    @start()
-    def initn(self):
-        self.state.candidate = CandidateInfo(name="test", position="developer", target_grade=GradeLevel.SENIOR,
-                                             experience="total")
-        return ""
-
-    @listen(or_("continue_interview", initn))
+    @listen("continue_interview")
     def prepare_question(self, _):
         """Propose next question"""
         logger.info("[MAIN] prepare_question")
+        ilog.l_new(self.state)
         result = kickoff_interview(InterviewRuntimeCrew(), self.state)
         logger.info(f"[MAIN] interviewer output {result}")
         if result.should_end:
             self.state.is_active = False
         self.state.current_question = result.user_message
-        return self.state.current_question
+        return self.ask_question()
 
-    @listen(or_(prepare_question, "repeat_question"))
     @human_feedback(
         message="Answer question: ",
         provider=feedback.get_feedback_provider()
     )
     def ask_question(self):
         """Ask prepared question"""
-        q = self.state.current_question
-        log.next()
-        log.on_interviewer(q)
         return self.state.current_question
 
     @listen(ask_question)
     def get_candidate_answer(self, human_result):
         """Get response from candidate"""
         text = human_result.feedback
-        log.on_user(text)
+        logger.info(f"[MAIN] get_candidate_answer {text}")
         self.state.candidate_answer = text
+        ilog.l_update_texts(self.state)
         return text
+
+    """
+    3 этап - модерация
+    """
 
     @router(get_candidate_answer)
     def moderate_input(self, candidate_text):
         """Apply input moderation and minimal intention classification"""
-        try:
-            moderation = ModerationCrew().crew().kickoff(
-                inputs=dict(
-                    interview_topic=self.state.interview_topic,
-                    interviewer_message=self.state.current_question,
-                    candidate_message=candidate_text
-                )).pydantic
-        except:
-            self.state.moderator_context = GuardClassificationResult()
-            return "continue_interview"
-
+        moderation = kickoff_moderator(ModerationCrew(), self.state, candidate_text)
         self.state.moderator_context = moderation
         category = moderation.category
 
@@ -142,7 +122,7 @@ class InterviewFlow(Flow[InterviewState]):
     @listen("mod_handle_relevant")
     def handle_relevant(self, _):
         """Обработка релевантных ответов"""
-        logger.info(f"[MAIN] continua analyze QA")
+        logger.info(f"[MAIN] QA analysis start ")
         result = kickoff_qa_evaluation(EvaluationCrew(), self.state)
         self.state.evaluator_context = result
         if t := self.state.hards_by_topic.get(result.topic.lower(), None):
@@ -156,12 +136,18 @@ class InterviewFlow(Flow[InterviewState]):
         logger.info(f"[MAIN] analysis output score={result.score} {result.softskills}")
         return "answer"
 
+    """
+    4 этап - анализ ответа и дальнейшмих действий
+    """
+
     @listen(handle_relevant)
     def qa_complete(self, _):
         logger.info(f"[MAIN] strategy...")
         result = kickoff_direction(DirectionCrew(), self.state)
-        logger.info(f"[MAIN] output {result}")
+        logger.info(f"[MAIN] strategy output {result}")
         self.state.strategist_context = result
+        if self.state.strategist_context.next_action == StrategyAction.FINISH:
+            self.state.is_active = False
         next_topic = result.next_topic.lower()
         if self.state.current_topic.topic != next_topic:
             self.state.current_topic = HardSkillScore(topic=next_topic)
@@ -170,12 +156,14 @@ class InterviewFlow(Flow[InterviewState]):
         self.state.question_count += 1
         return "ok"
 
-    @listen(or_(qa_complete))
+    @listen(qa_complete)
     def continue_interview(self, _):
         """Continue interview"""
         if not self.state.is_active:
             return self.finalize_interview(None)
         return 'step done'
+
+    """"""
 
     @human_feedback(
         message="Ознакомьтесь с результатами интервью: ",
@@ -184,10 +172,13 @@ class InterviewFlow(Flow[InterviewState]):
     def finalize_interview(self, _):
         """End interview"""
         result = kickoff_final(FinalCrew(), self.state)
-        log.data.final_feedback = result
-        with open(f"logs/interview_log.{datetime.now().timestamp()}.json", "w") as f:
-            f.write(log.export())
-        with open(f"logs/interview_out.{datetime.now().timestamp()}.md", "w") as f:
+        log = ilog.l_export(self.state, result)
+        dt = datetime.now().timestamp()
+        with open(f"logs/interview_log.{dt}.json", "w") as f:
+            f.write(log.model_dump_json())
+        with open(f"logs/interview_log.{dt}.md", "w") as f:
+            f.write(ilog.l_report(self.state))
+        with open(f"logs/interview_report.{dt}.md", "w") as f:
             f.write(result)
         return result
 

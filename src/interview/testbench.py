@@ -1,3 +1,4 @@
+import sys
 from typing import Callable
 
 import feedback
@@ -37,7 +38,10 @@ def run():
     sim = SimFeedbackProvider()
     feedback.set_feedback_provider(sim)
 
-    sc = open("tb_scenario/sc1.list").read()
+    if len(sys.argv) > 1:
+        sc = open(sys.argv[-1]).read()
+    else:
+        sc = open("tb_scenario/sc1.list").read()
 
     tester = TestCandidateAgent(CandidateInfo(
         name="Петр",

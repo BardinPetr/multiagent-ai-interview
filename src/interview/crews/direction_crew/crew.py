@@ -5,7 +5,8 @@ from crewai.agents.agent_builder.base_agent import BaseAgent
 from crewai.project import CrewBase, agent, crew, task
 
 from interview.config.settings import settings
-from interview.state import InterviewState, StrategistContext, HistoryItem
+from interview.config.utils import kickoff
+from interview.state import InterviewState, StrategistContext
 
 
 @CrewBase
@@ -62,12 +63,10 @@ class DirectionCrew:
 
 
 def kickoff_direction(crew, state: InterviewState) -> StrategistContext:
-    try:
-        inputs = evaluate_direction_input(state)
-        res = crew.crew().kickoff(inputs=inputs)
-        return res.pydantic
-    except:
-        return StrategistContext(next_topic="continue")
+    return kickoff(
+        crew,
+        evaluate_direction_input(state)
+    ) or StrategistContext(next_topic="continue")
 
 
 def evaluate_direction_input(state: InterviewState) -> Dict:
@@ -78,6 +77,7 @@ def evaluate_direction_input(state: InterviewState) -> Dict:
         hard_skills_scores=', '.join([i.model_dump_json() for i in state.hards_by_topic.values()]),
         soft_skills_scores=state.softs.model_dump_json(),
         question_count=state.question_count,
+        question_count_max=state.question_count_max,
         current_difficulty=state.strategist_context.current_difficulty,
         evaluator_context=state.evaluator_context.model_dump_json(),
         recent_history='\n '.join(i.model_dump_json() for i in state.history),

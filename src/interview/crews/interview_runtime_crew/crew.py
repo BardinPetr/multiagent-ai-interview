@@ -5,6 +5,7 @@ from crewai.agents.agent_builder.base_agent import BaseAgent
 from crewai.project import CrewBase, agent, crew, task
 
 from interview.config.settings import settings
+from interview.config.utils import kickoff
 from interview.state import InterviewState, InterviewerUpdate
 
 
@@ -63,12 +64,9 @@ class InterviewRuntimeCrew:
 
 
 def kickoff_interview(crew, state: InterviewState) -> InterviewerUpdate:
-    try:
-        inputs = {**conduct_interview_input(state), **formulate_technical_question_input(state)}
-        res = crew.crew().kickoff(inputs=inputs)
-        return res.pydantic
-    except:
-        return kickoff_interview(crew, state)
+    inputs = {**conduct_interview_input(state), **formulate_technical_question_input(state)}
+    return kickoff(crew, inputs) or InterviewerUpdate(should_end=True)
+
 
 def conduct_interview_input(state: InterviewState) -> Dict:
     return dict(
@@ -96,5 +94,6 @@ def formulate_technical_question_input(state: InterviewState) -> Dict:
         topic=state.strategist_context.next_topic or state.interview_topic,
         difficulty=state.strategist_context.current_difficulty,
         target_grade=state.candidate.target_grade,
-        previous_questions="\n".join(i.model_dump_json() for i in state.history[-3:]) if state.history else "Предыдущих вопросов не было",
+        previous_questions="\n".join(
+            i.model_dump_json() for i in state.history[-3:]) if state.history else "Предыдущих вопросов не было",
     )

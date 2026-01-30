@@ -5,7 +5,8 @@ from crewai.agents.agent_builder.base_agent import BaseAgent
 from crewai.project import CrewBase, agent, crew, task
 
 from interview.config.settings import settings
-from interview.state import GuardClassificationResult
+from interview.config.utils import kickoff
+from interview.state import GuardClassificationResult, InterviewState, GuardCategory
 
 
 @CrewBase
@@ -40,3 +41,13 @@ class ModerationCrew:
             verbose=False
         )
 
+
+def kickoff_moderator(crew, state: InterviewState, candidate_text) -> GuardClassificationResult:
+    return kickoff(
+        crew,
+        dict(
+            interview_topic=state.interview_topic,
+            interviewer_message=state.current_question,
+            candidate_message=candidate_text
+        )
+    ) or GuardClassificationResult(category=GuardCategory.IRRELEVANT)

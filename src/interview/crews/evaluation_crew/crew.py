@@ -5,6 +5,7 @@ from crewai.agents.agent_builder.base_agent import BaseAgent
 from crewai.project import CrewBase, agent, crew, task
 
 from interview.config.settings import settings
+from interview.config.utils import kickoff
 from interview.state import InterviewState, EvaluatorContext, SoftSkillScores
 
 
@@ -94,12 +95,11 @@ class EvaluationCrew:
 
 
 def kickoff_qa_evaluation(crew, state: InterviewState) -> EvaluatorContext:
-    try:
-        inputs = evaluate_answer_input(state)
-        res = crew.crew().kickoff(inputs=inputs)
-        return res.pydantic
-    except:
-        return EvaluatorContext(has_info_about_answer=False)
+    return kickoff(
+        crew,
+        evaluate_answer_input(state)
+    ) or EvaluatorContext(has_info_about_answer=False)
+
 
 def evaluate_answer_input(state: InterviewState) -> Dict:
     return dict(

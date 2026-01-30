@@ -5,7 +5,8 @@ from crewai.agents.agent_builder.base_agent import BaseAgent
 from crewai.project import CrewBase, agent, task, crew
 
 from interview.config.settings import settings
-from interview.state import InfoCollectionResult
+from interview.config.utils import kickoff
+from interview.state import InfoCollectionResult, InterviewState
 
 
 @CrewBase
@@ -86,3 +87,13 @@ class InfoCollectorCrew:
             process=Process.sequential,
             verbose=False
         )
+
+
+def kickoff_collector(crew, state: InterviewState, prev_user_input: str) -> InfoCollectionResult:
+    return kickoff(
+        crew,
+        dict(
+            candidate_summary=state.candidate.model_dump_json(),
+            user_response=prev_user_input,
+        )
+    ) or InfoCollectionResult(is_complete=False)

@@ -122,10 +122,11 @@ class InterviewerUpdate(BaseModel):
 
 
 class HistoryItem(BaseModel):
+    turn_id: int
     question: Optional[str] = None
     answer: Optional[str] = None
     score: Optional[float] = 0
-    thoughts: Optional[List[str]] = Field(default_factory=dict)
+    thoughts: Optional[List[str]] = []
 
 
 class InterviewState(BaseModel):
@@ -135,15 +136,16 @@ class InterviewState(BaseModel):
     interview_topic: str = ""
     current_topic: HardSkillScore = HardSkillScore(topic="")
 
-    hards_by_topic: Dict[str, HardSkillScore] = Field(default_factory=dict)
+    hards_by_topic: Dict[str, HardSkillScore] = {}
     softs: SoftSkillScores = SoftSkillScores()
 
-    history: List[HistoryItem] = Field(default_factory=list)
+    history: List[HistoryItem] = []
 
     current_question: str = ""
     candidate_answer: str = ""
 
     question_count: int = 0
+    question_count_max: int = 10
 
     is_initialized: bool = False
     is_active: bool = True

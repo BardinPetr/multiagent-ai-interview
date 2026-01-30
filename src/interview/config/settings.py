@@ -1,11 +1,16 @@
 from pydantic_settings import BaseSettings
-from typing import Optional
+
+# noinspection PyUnresolvedReferences
+import interview.interview_log
+
 
 class Settings(BaseSettings):
     llm: str = "openrouter/google/gemini-2.5-flash"
+    # llm: str = "openrouter/google/gemini-2.5-flash"
 
     class Config:
         env_file = ".env"
         case_sensitive = False
+
 
 settings = Settings()
